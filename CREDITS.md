@@ -9,12 +9,12 @@ This port re-implements the program in Rust and plays from the original game's o
 
 | File | Source path | Used as |
 |---|---|---|
-| BEER.DAT | /home/alex/Projects/rusty-eichhoff/original/BEER.DAT (copied to app/data/BEER.DAT and built into the program) | the game's whole data archive (contents below) |
-| CONFIG.HIG | /home/alex/Projects/rusty-eichhoff/original/CONFIG.HIG (copied to app/data/CONFIG.HIG) | default keys, sound setting and the original high-score table |
-| BEER.EXE | /home/alex/Projects/rusty-eichhoff/original/BEER.EXE | not copied; studied for the rules and numbers (see MECHANICS.md). Its built-in palette equals MENU.PCX's, so the palette is read from there. |
-| READ.ME | /home/alex/Projects/rusty-eichhoff/original/READ.ME | not copied; release notes read for reference |
+| BEER.DAT | original game: BEER.DAT (copied to `data/BEER.DAT` for private builds only; not in this repository) | the game's whole data archive (contents below) |
+| CONFIG.HIG | original game: CONFIG.HIG (copied to `data/CONFIG.HIG` for private builds only; not in this repository) | default keys, sound setting and the original high-score table |
+| BEER.EXE | original game: BEER.EXE | not copied; studied for the rules and numbers (see MECHANICS.md). Its built-in palette equals MENU.PCX's, so the palette is read from there. |
+| READ.ME | original game: READ.ME | not copied; release notes read for reference |
 
-## Inside BEER.DAT (all used from /home/alex/Projects/rusty-eichhoff/original/BEER.DAT)
+## Inside BEER.DAT
 
 | Member | Bytes | Used as |
 |---|---|---|

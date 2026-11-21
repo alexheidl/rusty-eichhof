@@ -29,7 +29,7 @@ jobs:
             target: aarch64-apple-darwin
             name: macos-arm64
             exe: last-eichhof
-          - os: macos-13
+          - os: macos-15-intel
             target: x86_64-apple-darwin
             name: macos-x86_64
             exe: last-eichhof

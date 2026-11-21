@@ -1,8 +1,6 @@
-This build contains the original game's own files, for the private use of the person who owns the game, on their own computer. It must not be shared or published.
+# The Last Eichhof — for today's computers, phones and browsers
 
 > In this source repository the original game's files are **not** included (`BEER.DAT` and `CONFIG.HIG` are ignored); a private build embeds them from `data/`, the public release reads `BEER.DAT` from the player's own copy. See `RELEASING.md`.
-
-# The Last Eichhof — for today's computers, phones and browsers
 
 A port of the 1993 freeware DOS shoot-'em-up *The Last Eichhof* by ALPHA-HELIX. It runs the original
 pictures, sprites, fonts, sounds, music and level data from the game's `BEER.DAT`, with the game rules
