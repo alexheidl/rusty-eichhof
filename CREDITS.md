@@ -9,10 +9,10 @@ This port re-implements the program in Rust and plays from the original game's o
 
 | File | Source path | Used as |
 |---|---|---|
-| BEER.DAT | original game: BEER.DAT (copied to `data/BEER.DAT` for private builds only; not in this repository) | the game's whole data archive (contents below) |
-| CONFIG.HIG | original game: CONFIG.HIG (copied to `data/CONFIG.HIG` for private builds only; not in this repository) | default keys, sound setting and the original high-score table |
+| BEER.DAT | `data/BEER.DAT`, unchanged from the original game, built into the program | the game's whole data archive (contents below) |
+| CONFIG.HIG | `data/CONFIG.HIG`, unchanged from the original game, built into the program | default keys, sound setting and the original high-score table |
 | BEER.EXE | original game: BEER.EXE | not copied; studied for the rules and numbers (see MECHANICS.md). Its built-in palette equals MENU.PCX's, so the palette is read from there. |
-| READ.ME | original game: READ.ME | not copied; release notes read for reference |
+| READ.ME | `data/READ.ME`, unchanged from the original game | shipped in the release zips as ORIGINAL-READ.ME |
 
 ## Inside BEER.DAT
 

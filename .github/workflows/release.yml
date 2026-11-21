@@ -1,6 +1,6 @@
-# Builds the public release (WITHOUT the original game's data) for Windows, macOS, Linux and the
-# web whenever a version tag such as v1.0.0 arrives on GitHub, and attaches the zips to a draft
-# GitHub release. Players add BEER.DAT from their own copy of The Last Eichhof.
+# Builds the release for Windows, macOS, Linux and the web whenever a version tag such as v1.0.0
+# arrives on GitHub, and attaches the zips to a draft GitHub release. The original freeware game's
+# data (data/BEER.DAT, data/CONFIG.HIG) is built into the program, so the zips are ready to play.
 name: release
 
 on:
@@ -43,7 +43,7 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev libx11-dev libxi-dev libgl1-mesa-dev
       - name: Build
-        run: cargo build --release --no-default-features --target ${{ matrix.target }}
+        run: cargo build --release --target ${{ matrix.target }}
       - name: Package
         shell: bash
         run: |
@@ -51,6 +51,7 @@ jobs:
           mkdir "$dir"
           cp target/${{ matrix.target }}/release/${{ matrix.exe }} "$dir/"
           cp PLAYERS.md "$dir/README.txt"
+          cp data/READ.ME "$dir/ORIGINAL-READ.ME"
           if [ "${{ runner.os }}" = "Windows" ]; then 7z a "$dir.zip" "$dir"; else zip -r "$dir.zip" "$dir"; fi
       - uses: actions/upload-artifact@v4
         with:
@@ -65,7 +66,7 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
       - name: Build
-        run: cargo build --release --no-default-features --target wasm32-unknown-unknown
+        run: cargo build --release --target wasm32-unknown-unknown
       - name: Package
         run: |
           dir=last-eichhof-web
@@ -73,6 +74,7 @@ jobs:
           cp web/index.html web/mq_js_bundle.js "$dir/"
           cp target/wasm32-unknown-unknown/release/last-eichhof.wasm "$dir/"
           cp PLAYERS.md "$dir/README.txt"
+          cp data/READ.ME "$dir/ORIGINAL-READ.ME"
           zip -r "$dir.zip" "$dir"
       - uses: actions/upload-artifact@v4
         with:

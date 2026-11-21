@@ -1,8 +1,5 @@
 /target
 /shots
 /dist
-# The original game's files: never put these in the repository or a release.
-/data/BEER.DAT
-/data/CONFIG.HIG
 /web/last-eichhof.wasm
 __pycache__/

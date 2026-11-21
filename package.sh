@@ -1,11 +1,12 @@
 #!/bin/sh
-# Makes a public zip for this computer in dist/ (without the original game's files).
+# Makes a ready-to-play zip for this computer in dist/ (original game data built in).
 set -e
 cd "$(dirname "$0")"
-cargo build --release --no-default-features --target-dir target/public
+cargo build --release
 name="last-eichhof-$(uname -s | tr 'A-Z' 'a-z')-$(uname -m)"
 mkdir -p "dist/$name"
-cp target/public/release/last-eichhof "dist/$name/"
+cp target/release/last-eichhof "dist/$name/"
 cp PLAYERS.md "dist/$name/README.txt"
+cp data/READ.ME "dist/$name/ORIGINAL-READ.ME"
 (cd dist && zip -qr "$name.zip" "$name")
 echo "Done: dist/$name.zip"
