@@ -1,0 +1,94 @@
+# Builds the public release (WITHOUT the original game's data) for Windows, macOS, Linux and the
+# web whenever a version tag such as v1.0.0 arrives on GitHub, and attaches the zips to a draft
+# GitHub release. Players add BEER.DAT from their own copy of The Last Eichhof.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            name: linux-x86_64
+            exe: last-eichhof
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            name: windows-x86_64
+            exe: last-eichhof.exe
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            name: macos-arm64
+            exe: last-eichhof
+          - os: macos-13
+            target: x86_64-apple-darwin
+            name: macos-x86_64
+            exe: last-eichhof
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Linux libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libx11-dev libxi-dev libgl1-mesa-dev
+      - name: Build
+        run: cargo build --release --no-default-features --target ${{ matrix.target }}
+      - name: Package
+        shell: bash
+        run: |
+          dir=last-eichhof-${{ matrix.name }}
+          mkdir "$dir"
+          cp target/${{ matrix.target }}/release/${{ matrix.exe }} "$dir/"
+          cp PLAYERS.md "$dir/README.txt"
+          if [ "${{ runner.os }}" = "Windows" ]; then 7z a "$dir.zip" "$dir"; else zip -r "$dir.zip" "$dir"; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: last-eichhof-${{ matrix.name }}.zip
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Build
+        run: cargo build --release --no-default-features --target wasm32-unknown-unknown
+      - name: Package
+        run: |
+          dir=last-eichhof-web
+          mkdir "$dir"
+          cp web/index.html web/mq_js_bundle.js "$dir/"
+          cp target/wasm32-unknown-unknown/release/last-eichhof.wasm "$dir/"
+          cp PLAYERS.md "$dir/README.txt"
+          zip -r "$dir.zip" "$dir"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web
+          path: last-eichhof-web.zip
+
+  release:
+    needs: [desktop, web]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
+          draft: true

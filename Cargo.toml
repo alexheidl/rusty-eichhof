@@ -1,0 +1,27 @@
+[package]
+name = "last-eichhof"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+# Builds the original BEER.DAT and CONFIG.HIG into the program (private builds only).
+# Release builds use --no-default-features and read BEER.DAT from beside the program.
+default = ["embedded"]
+embedded = []
+
+[dependencies]
+macroquad = { version = "0.4", features = ["audio"] }
+
+[profile.dev]
+opt-level = 2
+
+[profile.release]
+opt-level = 3
+
+[package.metadata.android]
+package_name = "rs.lasteichhof.game"
+label = "The Last Eichhof"
+fullscreen = true
+
+[package.metadata.android.activity_attributes]
+"android:screenOrientation" = "userLandscape"

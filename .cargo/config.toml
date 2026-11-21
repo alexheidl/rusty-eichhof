@@ -1,0 +1,4 @@
+# The sound library declares its browser functions as plain externs; newer Rust needs this so
+# they become imports filled in by web/mq_js_bundle.js.
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "link-arg=--allow-undefined"]
