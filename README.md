@@ -54,7 +54,27 @@ Keys can be changed in *Options → Choose keys*, like in the original. A new pl
 game's own high-score table (ATOMMUELL … TRITONE). Settings and high scores are saved in the original
 `CONFIG.HIG` format: in `~/.config/last-eichhof/` or `%APPDATA%\last-eichhof\` on computers, in the
 app's private storage on Android and in the browser's local storage on the web.
-The original cheat still works: start the program with the argument `007.7`.
+
+### Cheat
+
+The original 1993 cheat still works: start the game with the argument `007.` followed by a digit.
+The digit adds up three switches:
+
+| Value | Effect |
+|---|---|
+| 1 | unlimited lives: dying doesn't cost a bottle |
+| 2 | unlimited money: Fr. 9999.95 at every shop visit, and buying costs nothing |
+| 4 | invulnerable: enemies can't destroy your bottle |
+
+Add them to combine: `007.3` gives lives and money, `007.7` gives everything (a digit above 7 wraps
+around, so `007.9` works like `007.1`).
+
+- Linux or macOS: `./last-eichhof 007.7` in a terminal, in the unpacked folder.
+- Windows: `last-eichhof.exe 007.7` in Command Prompt, or a shortcut with ` 007.7` added after the
+  program path under *Target*.
+
+The web and Android versions have no command line, so the cheat isn't available there. As in the
+original, the game shows no sign that it is on.
 
 ## How the port was made
 
