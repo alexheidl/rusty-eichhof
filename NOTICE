@@ -1,0 +1,8 @@
+The Last Eichhof port
+
+The MIT License in LICENSE covers the new code of this port only. It does NOT
+cover the original game's files in data/ (BEER.DAT, CONFIG.HIG, READ.ME) or
+anything inside them (pictures, sprites, fonts, sounds, music, level data).
+Those are The Last Eichhof, (c) copyright 1993 ALPHA-HELIX (Tritone, Tweety,
+Zynax of Dark System), released as freeware ("Please copy like crazy"); they
+are included unchanged and remain the property of their authors.

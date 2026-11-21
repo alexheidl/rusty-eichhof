@@ -102,4 +102,4 @@ Details in [CREDITS.md](CREDITS.md).
 
 The port's own code is released under the [MIT License](LICENSE). This does **not** cover the
 original game's files in `data/`: *The Last Eichhof* and everything in `BEER.DAT` remain © 1993
-ALPHA-HELIX, freeware, included unchanged as the authors invited ("Please copy like crazy").
+ALPHA-HELIX, freeware, included unchanged as the authors invited ("Please copy like crazy"). See [NOTICE](NOTICE).

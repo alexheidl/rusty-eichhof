@@ -19,12 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----------------------------------------------------------------------------
-
-This license covers the new code of this port only. It does NOT cover the
-original game's files in data/ (BEER.DAT, CONFIG.HIG, READ.ME) or anything
-inside them (pictures, sprites, fonts, sounds, music, level data). Those are
-The Last Eichhof, (c) copyright 1993 ALPHA-HELIX (Tritone, Tweety, Zynax of
-Dark System), released as freeware ("Please copy like crazy"); they are
-included unchanged and remain the property of their authors.
