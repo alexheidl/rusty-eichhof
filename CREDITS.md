@@ -1,7 +1,25 @@
 # Credits
 
-**The Last Eichhof** (c) 1993 ALPHA-HELIX (Switzerland), released as freeware.
-Programming, sound effects and level design by Tritone; graphics and fonts by Tweety; additional programming and music by Zynax of Dark System.
+## The original game
+
+**The Last Eichhof** — "An Alpha Helix Production, (c) copyright 1993", Switzerland. Released as
+freeware.
+
+| Who | What |
+|---|---|
+| **Tritone** | programming, sound effects and level design |
+| **Tweety** | graphics and fonts |
+| **Zynax** of Dark System | additional programming and music |
+
+(Names and roles as given in the game's own scrolling credits in `BEER.EXE`.)
+
+From the original release notes (`data/READ.ME`): *"Thank you for playing this game. And by the
+way: PLEASE copy it to all your friends."* And from the game: *"This game is FREEWARE. Please
+copy like crazy. If you like it, just send a postcard to ALPHA-HELIX."*
+
+All pictures, sprites, fonts, sound effects, music and level data in this port are theirs.
+
+## This port
 
 This port re-implements the program in Rust and plays from the original game's own data. Every original file it uses is listed below with where it came from. They are used unchanged.
 
