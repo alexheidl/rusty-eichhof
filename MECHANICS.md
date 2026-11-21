@@ -2,8 +2,11 @@
 
 Every number below was read from the original program (BEER.EXE, Borland C++ 1991, 16-bit DOS) with
 Ghidra, or from the data files inside BEER.DAT. Function addresses are Ghidra's `1000:xxxx` (linear
-`0x1xxxx`). Data addresses are offsets in the data segment `1a97`. Values marked **estimated** were
-looked for in the code and not found.
+`0x1xxxx`). Data addresses are offsets in the data segment `1a97`.
+
+The original C/assembly source (released around 1995 by Dany Schoch, now at
+[ForNeVeR/the-last-eichhof](https://github.com/ForNeVeR/the-last-eichhof)) later turned up; this sheet
+was checked against it, and file names such as `GAMEASM.ASM` or `SHOP.C` refer to that source.
 
 ## Timing and screen
 | What | Value | Source |
@@ -33,7 +36,7 @@ looked for in the code and not found.
 | Start position | bottle centred on (150, 190) (top-left rounded to multiple of 4) | `FUN_1000_2224(0x96,0xbe)` |
 | Lives | 4 at new game; one is used per attempt, the bar shows up to 6 spare bottles | `FUN_1000_14d8`, `FUN_1000_1fa3`, `FUN_1000_64ab` |
 | Start invulnerability | 70 ticks (3.5 s), blinking (flash every other 2 ticks) | `DS:0f44 = 0x46` in `FUN_1000_653e`, `FUN_1000_5d6a` |
-| Death | touching any enemy object; explosion 0 at the bottle, all mounted parts removed; after 60 ticks restart from the last checkpoint | `FUN_1000_62e3`, `FUN_1000_653e` |
+| Death | an enemy object (any, including invincible and transparent ones) touching the main bottle (the mounted weapons are never tested); explosion 0 at the bottle, all mounted parts removed; after 60 ticks restart from the last checkpoint | `FUN_1000_62e3`, `FUN_1000_653e` |
 | Mounted parts | the bottle plus up to 6 bought weapons (7 parts) placed anywhere in the shop's placement box | `FUN_1000_22cb`, `FUN_1000_2bad` |
 
 ## Weapons (WEAPONS.WPN: name, sprite, shot, price, reload, type)
@@ -56,7 +59,7 @@ Fire the counters keep counting down to 0. (`FUN_1000_6342`)
 | 10 | I WANT TO BE FAST (+2 speed) | – | 2.00 | – | menu card, schnaps bonus |
 
 Shots (WEAPONS.SHT, each `[dx, dy, damage, homing speed, sprite, script…]`; script = one (vx,vy)
-step per tick, 0x8001 n = also fire shot n, 0x8002 = home on nearest shootable enemy, 0x8003 =
+step per tick, 0x8001 n = also fire shot n, 0x8002 = home on the first shootable enemy in slot order (not the nearest; GAMEASM.ASM), 0x8003 =
 keep velocity and bounce off the playfield edges, 0x8000 = end). Shots leaving the playfield vanish.
 (`FUN_1000_5bd3`, `FUN_1000_5dee`). Damages: shot0 2, shot1 6 (splits into shots 2–5 with 3/3/3/2),
 6/7: 2, 8: 6, 9: 3, 10/11: 2, 12: 3, 13: 2 (homing, speed 12), 14/15: 2 (bouncing).
@@ -97,19 +100,23 @@ object's sprite, 0x8005 n x y spawn enemy, 0x8006 n x y tx ty spawn aimed enemy,
 Timeline (`FUN_1000_653e`): entries `[tick, x, y, what]`; what ≥ 0 spawns enemy `what` at (x,y);
 0x8000 stars start scrolling, 0x8001 stars stop, 0x8002 play level sound x, 0x8003 checkpoint
 (restart point after a death: timeline position, score and remaining goal are restored). The
-timeline clock stops while a flag-0x08 enemy lives. When the goal count reaches 0 the level ends
-100 ticks (5 s) later. Stars (.STA `[x, y, colour, speed]`) fall `speed` px per tick, wrapping at y 211.
+timeline clock stops when a flag-0x08 enemy appears and only runs again when such an enemy is
+shot (if it leaves the screen instead, the clock stays stopped — the same in the original). When the goal count reaches 0 the level ends
+100 ticks (5 s) later. Stars (.STA `[x, y, colour, speed]`) fall `speed` px per tick, wrapping at y 211; a star is always drawn one step ahead of its
+position (XMODEASM.ASM starfield), whether the stars move or not.
 
 ## Score, money, shop
 | What | Value | Source |
 |---|---|---|
 | Score | sum of enemy points (unsigned 16-bit each), shown as 8 digits with a gap after the last two | `FUN_1000_622e`, `FUN_1000_6404` |
 | Money after a level | money += ((score − score at last shop) + 1500) / 2500 × 5 (in Rappen; shown as Fr. x.yy) | `FUN_1000_3ddc` |
-| Selling | 3/4 of the price (integer) | `FUN_1000_272d`, `FUN_1000_2621` |
+| Selling | 3/4 of the price (integer); the money display counts up in a tight loop, so the new amount is there at once (paying likewise counts down at once) | `FUN_1000_272d`, `FUN_1000_2621`, SHOP.C `givemoneyback`/`payforweapon` |
+| Menu card | each name padded with dots to 28 characters, the price written over the end | SHOP.C |
 | Shop order | sell screen (if any weapon mounted), then the store (Stange, Pony, Barbara Bräu, Dunkel; left = menu card, further left = exit) | `FUN_1000_3ddc`, `FUN_1000_376b` |
 | Placement | weapon moved in 4 px steps inside x 156..268, y 20..95 around the bottle shown at (212, 59); Fire places it (refused on OVERLAP), Esc cancels (money already paid) | `FUN_1000_22cb` |
-| High scores | 8 entries, name 15 characters, winner text 33 characters for first place | `FUN_1000_4039` |
-| Cheat (command line `007.n`) | bit 1 unlimited lives, bit 2 money 9999.99, bit 4 invulnerable | `FUN_1000_05d9` |
+| High scores | 8 entries, name 15 characters, winner text 33 characters for first place; when the line is full a new character replaces the last; a new first place clears the old winner text | `FUN_1000_4039`, HISCORE.C |
+| Built-in high-score table (no CONFIG.HIG yet) | ATOMMUELL 810.00, POWER 296.00, JUBEL 148.00, ZYNAX 81.10, HEAVY 80.99, WASSERGLAS 63.67, TWEETY 45.58, TRITONE 0.01; winner text "EIN PROSIT AUF ALPHA-HELIX" | HISCORE.C |
+| Cheat (command line `007.n`) | bit 1 unlimited lives, bit 2 money 9999.95 at every shop visit, bit 4 invulnerable | `FUN_1000_05d9`, SHOP.C |
 
 ## Sound
 | What | Value | Source |
@@ -118,13 +125,18 @@ timeline clock stops while a flag-0x08 enemy lives. When the goal count reaches 
 | Sample rates | SND header kHz 15 → 15151 Hz, 12 → 12048 Hz (DSP time constant 256 − 1000/kHz); most sounds 15151 Hz, LONGTIME 12048 Hz | `FUN_1000_48ad` |
 | Formats | 8-bit unsigned PCM or Creative 4-bit ADPCM (header flag bit 0) | SND header, DSP commands 0x74/0x75 |
 | Music | TITLE.SND and HS.SND play once; BLICK, SELL, BUY and LONGTIME.SND loop | `FUN_1000_49c1`, `FUN_1000_49a3` |
-| Fades | 11 steps subtracting 6 (of 63) from every palette component, 2 screen refreshes (70 Hz) per step | `FUN_1000_77af`, `FUN_1000_77f1` |
+| Loudness | the raw 8-bit samples go to the DAC; most sounds already reach full scale, so the port plays every sound at its original level (no per-sound normalising) | SOUND.ASM |
+| Fades | 11 steps subtracting 6 (of 63) from every palette component, 2 screen refreshes per step | `FUN_1000_77af`, `FUN_1000_77f1` |
+| Screen refresh | the game's 320x220 Mode X runs at 59.94 Hz (25.175 MHz dot clock, 525 lines); only the 640x350 EGA newspaper intro runs at 70 Hz. Fades, the credits and the story scroll per refresh | XMODEASM.ASM |
+| Intro | the newspaper rises from black to white (21 steps of 3, one refresh each, `glowto(63,63,63)`), then fades in from dark (`glowin`) | INTRO.C |
+| Pause | waits for all keys up, then any key; that key isn't swallowed, movement read before the pause still applies, and P needs a new press to pause again | GAMEASM.ASM `keyboard` |
 
 ## Touch controls (new; the original has a keyboard only)
 Right half: drag to steer (finger movement becomes arrow steps at the bottle's speed, so it follows
 1:1). Left half: hold to fire. Tap: select / any key. Top-left corner: Esc. Top-right corner: P.
 Chosen with the person (they suggested split-screen steering and firing).
 
-## Not found in the code (estimated)
-- What happens after the last timeline entry: the original keeps reading past the table; the port
-  simply stops spawning (estimated).
+## Where the port deliberately differs
+- After the last timeline entry the original keeps reading: its remaining-entries counter only
+  drops when an enemy appears, so it reads 3, 17, 22, 11 and 16 records past the end of the .TBL
+  data in levels 0–4 (whatever is in memory there). The port stops at the end of the table.

@@ -50,8 +50,10 @@ Download the zip for your system from the [Releases](../../releases) page, unpac
 | Back / give up | Esc | tap the top-left corner |
 | Menus | 1–6, or arrows + Space/Enter | swipe up/down, tap to choose |
 
-Keys can be changed in *Options → Choose keys*, like in the original. Settings and high scores are
-saved in the original `CONFIG.HIG` format (`~/.config/last-eichhof/` or `%APPDATA%\last-eichhof\`).
+Keys can be changed in *Options → Choose keys*, like in the original. A new player starts with the
+game's own high-score table (ATOMMUELL … TRITONE). Settings and high scores are saved in the original
+`CONFIG.HIG` format: in `~/.config/last-eichhof/` or `%APPDATA%\last-eichhof\` on computers, in the
+app's private storage on Android and in the browser's local storage on the web.
 The original cheat still works: start the program with the argument `007.7`.
 
 ## How the port was made
@@ -61,6 +63,13 @@ The game rules were re-implemented by studying the original program (`BEER.EXE`,
 [MECHANICS.md](MECHANICS.md). The file formats inside `BEER.DAT` are described in
 [docs/FORMATS.md](docs/FORMATS.md). New compared to the original: touch controls, window scaling,
 and builds for modern systems.
+
+The original source code, released around 1995 by Dany Schoch and now kept at
+[ForNeVeR/the-last-eichhof](https://github.com/ForNeVeR/the-last-eichhof), turned up after the port
+was written. A line-by-line comparison found the port about 90–95% identical, and the differences a
+player could notice were fixed in version 1.2. What remains is on purpose or never happens in play:
+at the end of a level's enemy list the original reads past the end of its data (the port stops
+there), and a few cases the original leaves undefined. Details in `MECHANICS.md`.
 
 ## Building from source
 
@@ -85,7 +94,7 @@ How releases are made: [RELEASING.md](RELEASING.md).
 | Path | What it is |
 |---|---|
 | `src/` | the Rust program (macroquad) |
-| `data/` | the original game's `BEER.DAT`, `CONFIG.HIG` and `READ.ME`, unchanged |
+| `data/` | the original game's `BEER.DAT`, `CONFIG.HIG` and `READ.ME`, unchanged (only `BEER.DAT` is built in) |
 | `MECHANICS.md` | every rule and number taken from the original program |
 | `docs/FORMATS.md` | the original file formats |
 | `tools/` | Python helpers used to study the data (`datdump.py`, `eich.py`, `contact.py`) |
@@ -95,6 +104,7 @@ How releases are made: [RELEASING.md](RELEASING.md).
 ## Credits
 
 *The Last Eichhof* © 1993 ALPHA-HELIX (Tritone, Tweety, Zynax of Dark System), freeware.
+Original source released by Dany Schoch; thanks to Friedrich von Never for keeping it available.
 Port built with [macroquad](https://github.com/not-fl3/macroquad) (MIT/Apache-2.0).
 Details in [CREDITS.md](CREDITS.md).
 

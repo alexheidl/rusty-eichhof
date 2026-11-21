@@ -55,7 +55,7 @@ fn to6(p: &dat::Palette) -> Pal {
 
 fn spr_from_frames(frames: Vec<dat::Frame>, speed: u16, xgran: i32) -> Spr {
     let (w, h) = frames.first().map(|f| (f.w, f.h)).unwrap_or((0, 0));
-    Spr { w, h, frames: frames.into_iter().map(|f| f.pixels).collect(), speed, xgran }
+    Spr { w, h, frames: frames.into_iter().map(|f| f.pixels).collect::<Vec<_>>().into(), speed, xgran }
 }
 
 /// A table of far-pointer records over one file, kept as 16-bit words so scripts can be
@@ -118,22 +118,25 @@ pub struct Res {
     pub dat: Dat,
     pub game_pal: Pal,
     pub fonts: HashMap<&'static str, Spr>,
-    pub weapons: Vec<Wpn>,
+    pub weapons: std::rc::Rc<[Wpn]>,
     pub wsprites: Vec<Spr>,
     pub shots: &'static Table,
     sounds: HashMap<String, Snd>,
 }
 
+/// The long tunes (the title and high-score tunes are also the ones the original streamed from
+/// disk instead of loading).
+const STREAMED: &[&str] = &["TITLE.SND", "HS.SND", "LONGTIME.SND"];
+
 pub fn u16_at(d: &[u8], p: usize) -> u16 {
     u16::from_le_bytes([*d.get(p).unwrap_or(&0), *d.get(p + 1).unwrap_or(&0)])
 }
 
-/// 8-bit unsigned mono samples to a 16-bit WAV file (plays the same everywhere). The 1993
-/// samples use only a small part of the 8-bit range, so each sound is raised until its loudest
-/// sample reaches about 90% of full scale (at most 4x); the waveform itself is unchanged.
+/// 8-bit unsigned mono samples to a 16-bit WAV file (plays the same everywhere). The samples
+/// keep their original level: the SoundBlaster played the raw bytes, most sounds already reach
+/// full scale, so one common gain of 1 keeps every sound as loud relative to the others as in
+/// the original.
 pub fn wav16(rate: u32, samples: &[u8]) -> Vec<u8> {
-    let peak = samples.iter().map(|&s| (s as i32 - 128).abs()).max().unwrap_or(0).max(1);
-    let gain = (115.0 / peak as f32).clamp(1.0, 4.0);
     let n = samples.len() as u32 * 2;
     let mut v = Vec::with_capacity(44 + n as usize);
     v.extend_from_slice(b"RIFF");
@@ -149,7 +152,7 @@ pub fn wav16(rate: u32, samples: &[u8]) -> Vec<u8> {
     v.extend_from_slice(b"data");
     v.extend_from_slice(&n.to_le_bytes());
     for &s in samples {
-        let x = ((s as f32 - 128.0) * 256.0 * gain).clamp(-32768.0, 32767.0) as i16;
+        let x = ((s as i16) - 128) << 8;
         v.extend_from_slice(&x.to_le_bytes());
     }
     v
@@ -165,7 +168,7 @@ async fn make_sound(s: &dat::Sound) -> Snd {
 }
 
 impl Res {
-    pub fn load(beer_dat: &'static [u8]) -> Res {
+    pub fn load(beer_dat: &'static [u8]) -> Result<Res, String> {
         let dat = Dat::parse(beer_dat);
         let game_pal = to6(&dat::game_palette(&dat));
         let mut fonts = HashMap::new();
@@ -199,8 +202,8 @@ impl Res {
             }
         }
         let wpn = dat.file("WEAPONS.WPN").unwrap_or(&[]);
-        let n = u16_at(wpn, 0) as usize;
-        let weapons = (0..n)
+        let n = (u16_at(wpn, 0) as usize).min(wpn.len().saturating_sub(2) / 30);
+        let weapons: Vec<Wpn> = (0..n)
             .map(|i| {
                 let r = &wpn[2 + i * 30..2 + i * 30 + 30];
                 let end = r[..20].iter().position(|&b| b == 0).unwrap_or(20);
@@ -216,7 +219,38 @@ impl Res {
             .collect();
         let wsprites = sli_sprites(dat.file("WEAPONS.SLI").unwrap_or(&[]));
         let shots: &'static Table = Box::leak(Box::new(Table::parse(dat.file("WEAPONS.SHT").unwrap_or(&[]), 4)));
-        Res { dat, game_pal, fonts, weapons, wsprites, shots, sounds: HashMap::new() }
+        let res = Res { dat, game_pal, fonts, weapons: weapons.into(), wsprites, shots, sounds: HashMap::new() };
+        res.check()?;
+        Ok(res)
+    }
+
+    /// Refuses an archive the game would trip over (a damaged or different BEER.DAT), so the
+    /// player gets a message instead of a crash.
+    fn check(&self) -> Result<(), String> {
+        if self.weapons.len() < 6 {
+            return Err(format!("WEAPONS.WPN lists {} weapons, the game needs at least 6", self.weapons.len()));
+        }
+        for w in self.weapons.iter() {
+            if w.sprite >= self.wsprites.len() || self.wsprites[w.sprite].frames.is_empty() {
+                return Err(format!("weapon '{}' uses a missing sprite", w.name));
+            }
+            if w.kind & 0x8000 != 0 && w.shot >= self.shots.starts.len() {
+                return Err(format!("weapon '{}' uses a missing shot", w.name));
+            }
+        }
+        for (k, s) in &self.fonts {
+            if s.frames.is_empty() {
+                return Err(format!("{} is missing or empty", k.to_uppercase()));
+            }
+        }
+        for n in 0..5 {
+            for ext in ["DSC", "SLI", "FOE", "TBL"] {
+                if self.dat.file(&format!("LEVEL{}.{}", n, ext)).is_none() {
+                    return Err(format!("LEVEL{}.{} is missing", n, ext));
+                }
+            }
+        }
+        Ok(())
     }
 
     pub fn font(&self, k: &str) -> &Spr {
@@ -229,6 +263,9 @@ impl Res {
         (p.pixels, p.w, p.h, to6(&p.palette))
     }
 
+    /// A sound by name. Short sounds are kept once decoded; the long music pieces (title,
+    /// story and high-score tunes: tens of MB each once the audio system has converted them)
+    /// are decoded each time and freed when they stop.
     pub async fn sound(&mut self, name: &str) -> Snd {
         if let Some(s) = self.sounds.get(name) {
             return s.clone();
@@ -237,7 +274,9 @@ impl Res {
             Some(d) => make_sound(&dat::decode_snd(d)).await,
             None => None,
         };
-        self.sounds.insert(name.to_string(), s.clone());
+        if !STREAMED.contains(&name) {
+            self.sounds.insert(name.to_string(), s.clone());
+        }
         s
     }
 

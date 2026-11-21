@@ -1,9 +1,22 @@
 //! `--self-test <file.json>`: starts a game like a player (new game, level 1), steers and fires
 //! with scripted keys, and reports from the game's own state whether moving, shooting and the
-//! status bar work.
+//! status bar work. It also checks that the run replays exactly as recorded: the same keys must
+//! give the same final screen and score on every system (a fingerprint of both is compared with
+//! `REPLAY`), so any change to the game rules or drawing shows up.
 
 use crate::ctx::{Ctx, G};
 use crate::game::{Field, Hero, Outcome};
+
+/// FNV-1a fingerprint of the final screen and score of the scripted run.
+const REPLAY: u64 = 0x71f34e50e1b000d6;
+
+pub fn fnv(bytes: impl IntoIterator<Item = u8>) -> u64 {
+    let mut h: u64 = 0xcbf29ce484222325;
+    for b in bytes {
+        h = (h ^ b as u64).wrapping_mul(0x100000001b3);
+    }
+    h
+}
 
 fn keys(t: u64) -> Vec<G> {
     let mut v = vec![G::Fire];
@@ -34,8 +47,8 @@ pub async fn run(ctx: &mut Ctx, path: &str) {
     // HUD: the status bar row and score digits are on the screen.
     let w = ctx.scr.w;
     let bar_px = ctx.scr.pix[211 * w..220 * w].iter().filter(|&&p| p != 0).count();
-    let steps = vec![
-        (
+    let replay = fnv(ctx.scr.pix.iter().copied().chain(hero.score.to_le_bytes()));
+    let steps = [(
             "move",
             st.moved > 20,
             format!("the bottle moved {} px in total with the arrow keys", st.moved),
@@ -53,7 +66,11 @@ pub async fn run(ctx: &mut Ctx, path: &str) {
             bar_px > 300,
             format!("status bar with score and spare bottles drawn ({} lit pixels in rows 211-219), level '{}', outcome {:?}", bar_px, level_name, outcome),
         ),
-    ];
+        (
+            "replay",
+            replay == REPLAY,
+            format!("final screen and score fingerprint {:016x} (expected {:016x})", replay, REPLAY),
+        )];
     let mut json = String::from("{\"version\": 1, \"steps\": [");
     for (i, (s, ok, d)) in steps.iter().enumerate() {
         if i > 0 {

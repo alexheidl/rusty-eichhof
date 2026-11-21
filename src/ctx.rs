@@ -51,6 +51,8 @@ pub struct Save {
     pub winner: String,
 }
 
+pub type FrameHook = Box<dyn FnMut(&mut Ctx)>;
+
 pub struct Ctx {
     pub scr: Screen,
     pub res: Res,
@@ -81,7 +83,7 @@ pub struct Ctx {
     time: f64,
     pub touch: crate::touch::Touch,
     /// A hook run before each presented frame (screenshot / self-test bookkeeping).
-    pub on_frame: Option<Box<dyn FnMut(&mut Ctx)>>,
+    pub on_frame: Option<FrameHook>,
 }
 
 impl Ctx {
@@ -217,7 +219,7 @@ impl Ctx {
         match fast {
             true => {
                 // Run as fast as possible: show only every 16th step.
-                if self.ticks % 16 == 0 {
+                if self.ticks.is_multiple_of(16) {
                     self.frame().await;
                 }
             }
@@ -267,7 +269,7 @@ impl Ctx {
         }
     }
 
-    /// Palette fade from black (FUN_1000_77f1): 11 steps, two retraces each at 70 Hz.
+    /// Palette fade from black (FUN_1000_77f1, `glowin`): 11 steps, two display retraces each.
     pub async fn fade_in(&mut self) {
         let mut f: i32 = 60;
         while f >= 0 {
@@ -289,11 +291,26 @@ impl Ctx {
         self.scr.fade = 63;
     }
 
-    async fn retrace_wait(&mut self, n: u32) {
+    /// Every colour rises from black to white, one step of 3 per retrace (`glowto(63,63,63)`,
+    /// used by the newspaper intro before it fades in).
+    pub async fn glow_to_white(&mut self) {
+        let mut i = 0u8;
+        while i < 63 {
+            self.scr.white = Some(i);
+            self.retrace_wait(1).await;
+            i += 3;
+        }
+        self.scr.white = None;
+    }
+
+    /// Waits `n` display retraces. The game's 320x220 Mode X runs the VGA at 59.94 Hz
+    /// (25.175 MHz dot clock, 525 lines); the 640x350 EGA mode of the newspaper intro at 70.09 Hz.
+    pub async fn retrace_wait(&mut self, n: u32) {
         if self.mode == Mode::SelfTest {
             return;
         }
-        let t = n as f64 / 70.0;
+        let hz = if self.scr.w == 640 { 70.09 } else { 59.94 };
+        let t = n as f64 / hz;
         let mut waited = 0.0;
         while waited < t {
             self.frame().await;

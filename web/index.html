@@ -12,6 +12,35 @@
 <body>
 <canvas id="glcanvas" tabindex="1"></canvas>
 <script src="mq_js_bundle.js"></script>
-<script>load("last-eichhof.wasm");</script>
+<script>
+// Keeps the game's CONFIG.HIG (keys, sound, high scores) in this browser's localStorage.
+miniquad_add_plugin({
+  name: "eich_storage",
+  version: 1,
+  register_plugin: function (importObject) {
+    var KEY = "last-eichhof/CONFIG.HIG";
+    importObject.env.eich_config_store = function (ptr, len) {
+      try {
+        var bytes = new Uint8Array(wasm_memory.buffer, ptr, len);
+        var s = "";
+        for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+        localStorage.setItem(KEY, btoa(s));
+      } catch (e) { console.warn("could not save settings", e); }
+    };
+    importObject.env.eich_config_load = function (ptr, max) {
+      try {
+        var v = localStorage.getItem(KEY);
+        if (!v) return 0;
+        var s = atob(v);
+        var n = Math.min(s.length, max);
+        var dest = new Uint8Array(wasm_memory.buffer, ptr, n);
+        for (var i = 0; i < n; i++) dest[i] = s.charCodeAt(i);
+        return n;
+      } catch (e) { return 0; }
+    };
+  }
+});
+load("last-eichhof.wasm");
+</script>
 </body>
 </html>

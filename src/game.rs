@@ -142,7 +142,7 @@ impl Sprites {
     /// One display step (FUN_1000_76b1): advance animations, retire finished sprites, draw.
     pub fn draw(&mut self, scr: &mut Screen, lib: &[Spr], flash_col: u8) {
         for o in self.s.iter_mut().filter(|o| o.active) {
-            let def = &lib[o.spr];
+            let Some(def) = lib.get(o.spr) else { continue };
             let frames2 = (def.count().max(1) * 2) as u16;
             let mut a = o.anim + def.speed;
             if a >= frames2 {
@@ -166,7 +166,7 @@ impl Sprites {
             if o.kill != 0 {
                 continue;
             }
-            let def = &lib[o.spr];
+            let Some(def) = lib.get(o.spr) else { continue };
             let x = o.x - o.x.rem_euclid(def.xgran.max(1));
             let fr = (o.anim >> 1) as usize;
             if o.flash {
@@ -226,9 +226,9 @@ struct Part {
 /// Places the ship and its mounted weapons around a centre (FUN_1000_2224); returns the
 /// rounded top-left the mounts are relative to.
 pub fn place_parts(sp: &mut Sprites, lib: &[Spr], hero: &Hero, cx: i32, cy: i32) -> (Vec<i32>, i32, i32) {
-    let main = &lib[hero.mounts[0].w.sprite];
-    let bx = cx - main.w as i32 / 2;
-    let by = (cy - main.h as i32 / 2) & !3;
+    let (mw, mh) = lib.get(hero.mounts[0].w.sprite).map(|s| (s.w as i32, s.h as i32)).unwrap_or((0, 0));
+    let bx = cx - mw / 2;
+    let by = (cy - mh / 2) & !3;
     let bx4 = bx & !3;
     let mut hs = vec![];
     for m in &hero.mounts {
@@ -393,11 +393,12 @@ impl Field {
         }
         if flags & 0x20 != 0 {
             f.aim = ft.w(st + 5);
-            let (tx, ty) = if flags & 0x10 == 0 || target.is_none() {
-                let (px, py, _, _) = self.sp.pos(player);
-                (px, py)
-            } else {
-                target.unwrap()
+            let (tx, ty) = match target {
+                Some(t) if flags & 0x10 != 0 => t,
+                _ => {
+                    let (px, py, _, _) = self.sp.pos(player);
+                    (px, py)
+                }
             };
             let mut dx = tx - x;
             f.sx = 1;
@@ -579,18 +580,12 @@ impl Field {
                             s.pc += 1;
                             let (x, y, w, h) = self.sp.pos(s.h);
                             let mut nx = x + s.vx as i32;
-                            if nx < 0 {
-                                s.vx = -s.vx;
-                                nx += 2 * s.vx as i32;
-                            } else if nx + w > RIGHT {
+                            if nx < 0 || nx + w > RIGHT {
                                 s.vx = -s.vx;
                                 nx += 2 * s.vx as i32;
                             }
                             let mut ny = y + s.vy as i32;
-                            if ny < 0 {
-                                s.vy = -s.vy;
-                                ny += 2 * s.vy as i32;
-                            } else if ny + h > PLAY_BOTTOM {
+                            if ny < 0 || ny + h > PLAY_BOTTOM {
                                 s.vy = -s.vy;
                                 ny += 2 * s.vy as i32;
                             }
@@ -808,8 +803,10 @@ impl Field {
                     s.1 -= PLAY_BOTTOM;
                 }
             }
-            let y = if self.stars_moving { s.1 } else { (s.1 + s.3) % PLAY_BOTTOM };
-            if s.0 >= 0 && s.0 < 320 && y >= 0 && y < PLAY_BOTTOM {
+            // The original always plots a star one step ahead of its position, moving or not
+            // (XMODEASM starfield).
+            let y = (s.1 + s.3).rem_euclid(PLAY_BOTTOM);
+            if s.0 >= 0 && s.0 < 320 && (0..PLAY_BOTTOM).contains(&y) {
                 scr.pix[y as usize * scr.w + s.0 as usize] = s.2;
             }
         }
@@ -905,6 +902,7 @@ impl Field {
         let mut step: u16 = 1;
         let mut timer: i32 = 0x46;
         let mut result = 0;
+        let mut pause_latch = false;
         let mut pos = self.check.tbl_pos;
         let mut time = self.check.time;
         loop {
@@ -948,13 +946,17 @@ impl Field {
             if ctx.down(G::Down) {
                 dy += hero.speed;
             }
-            if ctx.down(G::Pause) {
+            // Pause (GAMEASM keyboard): wait until all keys are up, then for any key. The key
+            // that ends the pause is not swallowed, the movement read before the pause still
+            // applies, and a held P doesn't pause again until it is pressed anew.
+            if !ctx.down(G::Pause) {
+                pause_latch = false;
+            } else if !pause_latch {
                 ctx.wait_release().await;
                 ctx.wait_press().await;
-                ctx.wait_release().await;
-            } else {
-                self.steer(dx, dy, timer & 2 != 0);
+                pause_latch = true;
             }
+            self.steer(dx, dy, timer & 2 != 0);
             ctx.tick().await;
             self.draw_field(ctx, 15);
             self.collide_shots(hero, &mut goal, &mut step);

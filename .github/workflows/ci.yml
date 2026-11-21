@@ -1,0 +1,32 @@
+# Checks every push and pull request (and runs first in the release workflow): lints, unit tests
+# (decoders against golden fingerprints, the CONFIG.HIG format, key names) and the in-game
+# self-test, which plays level 1 with scripted keys and compares the final screen and score with
+# a recorded fingerprint.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Linux libraries
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libx11-dev libxi-dev libgl1-mesa-dev xvfb
+      - name: Lint
+        run: cargo clippy --release --all-targets -- -D warnings
+      - name: Unit tests
+        run: cargo test --release
+      - name: Self-test (plays level 1 in a virtual screen)
+        run: |
+          cargo build --release
+          xvfb-run -a -s "-screen 0 1280x800x24" ./target/release/last-eichhof --self-test selftest.json
+          cat selftest.json
+          python3 -c "import json,sys; s=json.load(open('selftest.json'))['steps']; bad=[x['step'] for x in s if not x['passed']]; sys.exit('failed: %s' % bad if bad else 0)"

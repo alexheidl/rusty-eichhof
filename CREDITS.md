@@ -19,6 +19,14 @@ copy like crazy. If you like it, just send a postcard to ALPHA-HELIX."*
 
 All pictures, sprites, fonts, sound effects, music and level data in this port are theirs.
 
+## The original source code
+
+Dany Schoch released the game's C and assembly source around 1995 ("Do what ever you want with this
+code"). Friedrich von Never keeps it available at
+[ForNeVeR/the-last-eichhof](https://github.com/ForNeVeR/the-last-eichhof). This port was written
+before the source turned up, from the compiled program; the source was later used to check the port
+and to correct it. No code was copied from it.
+
 ## This port
 
 This port re-implements the program in Rust and plays from the original game's own data. Every original file it uses is listed below with where it came from. They are used unchanged.
@@ -28,7 +36,7 @@ This port re-implements the program in Rust and plays from the original game's o
 | File | Source path | Used as |
 |---|---|---|
 | BEER.DAT | `data/BEER.DAT`, unchanged from the original game, built into the program | the game's whole data archive (contents below) |
-| CONFIG.HIG | `data/CONFIG.HIG`, unchanged from the original game, built into the program | default keys, sound setting and the original high-score table |
+| CONFIG.HIG | `data/CONFIG.HIG`, unchanged from the original game | kept with the original files; not built in (a new player starts with the game's own built-in high-score table, as the original does without a CONFIG.HIG) |
 | BEER.EXE | original game: BEER.EXE | not copied; studied for the rules and numbers (see MECHANICS.md). Its built-in palette equals MENU.PCX's, so the palette is read from there. |
 | READ.ME | `data/READ.ME`, unchanged from the original game | shipped in the release zips as ORIGINAL-READ.ME |
 

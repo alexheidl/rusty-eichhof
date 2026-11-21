@@ -5,18 +5,24 @@
 use crate::ctx::{HighScore, Save};
 use macroquad::prelude::KeyCode;
 
-#[cfg(feature = "embedded")]
-static DEFAULT: &[u8] = include_bytes!("../data/CONFIG.HIG");
-
-/// Without the original CONFIG.HIG: the original's default keys (FUN_1000_0825), sound on and an
-/// empty high-score table.
-#[cfg(not(feature = "embedded"))]
-fn fallback() -> Save {
+/// A new player's settings, as the original starts without a CONFIG.HIG: arrows, Space and P
+/// (MENU.C loadconfig), sound on, and the high-score table built into the game (HISCORE.C).
+pub fn defaults() -> Save {
+    let table = [
+        (81000, "ATOMMUELL"),
+        (29600, "POWER"),
+        (14800, "JUBEL"),
+        (8110, "ZYNAX"),
+        (8099, "HEAVY"),
+        (6367, "WASSERGLAS"),
+        (4558, "TWEETY"),
+        (1, "TRITONE"),
+    ];
     Save {
         keys: [KeyCode::Up, KeyCode::Down, KeyCode::Left, KeyCode::Right, KeyCode::Space, KeyCode::P],
         sound: true,
-        table: (0..8).map(|_| HighScore { score: 0, name: String::new() }).collect(),
-        winner: String::new(),
+        table: table.iter().map(|&(score, name)| HighScore { score, name: name.into() }).collect(),
+        winner: "EIN PROSIT AUF ALPHA-HELIX".into(),
     }
 }
 
@@ -55,26 +61,33 @@ pub fn key_to_scan(k: KeyCode) -> u16 {
     SCANS.iter().find(|e| e.1 == k).map(|e| e.0).unwrap_or(0)
 }
 
-/// The name the original shows for a key (its key-name table: ESC, SPACE, ENTER, ... else the letter).
+/// MENU.C `ownkeycodes`: for each scan code, an entry of `KEYTABLE` (0..=37) or, above 37, a
+/// font character (entry - 36 is the glyph, i.e. character entry - 4).
+const OWNKEYCODES: [u8; 89] = [
+    0, 0, 53, 54, 55, 56, 57, 58, 59, 60, 61, 52, 49, 47, 3, 4, 85, 91, 73, 86, 88, 93, 89, 77, 83, 84, 95, 97, 7, 8,
+    69, 87, 72, 74, 75, 76, 78, 79, 80, 63, 38, 43, 12, 96, 94, 92, 71, 90, 70, 82, 81, 48, 50, 51, 13, 14, 15, 1, 2,
+    24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 5, 6, 9, 10, 11, 36, 16, 17, 18, 37, 19, 20, 21, 22, 23, 0, 0, 96, 34, 35,
+];
+
+/// MENU.C `keytable`.
+const KEYTABLE: [&str; 38] = [
+    "ESC", "SPACE", "CPSLCK", "BKSP", "TAB", "NUMLCK", "SCRLCK", "ENTER", "CTRL", "HOME", "UP", "PGUP", "LSHFT",
+    "RSHFT", "[*]", "ALT", "LEFT", "[5]", "RIGHT", "END", "DOWN", "PGDN", "INSERT", "DELETE", "F1", "F2", "F3", "F4",
+    "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12", "[-]", "[+]",
+];
+
+/// The name the original shows for a key in "Choose keys" (MENU.C newkey).
 pub fn key_name(k: KeyCode) -> String {
-    let s = format!("{:?}", k).to_uppercase();
-    match k {
-        KeyCode::Space => "SPACE".into(),
-        KeyCode::Enter => "ENTER".into(),
-        KeyCode::Escape => "ESC".into(),
-        KeyCode::LeftShift => "LSHFT".into(),
-        KeyCode::RightShift => "RSHFT".into(),
-        KeyCode::LeftControl | KeyCode::RightControl => "CTRL".into(),
-        KeyCode::LeftAlt | KeyCode::RightAlt => "ALT".into(),
-        KeyCode::CapsLock => "CPSLCK".into(),
-        KeyCode::NumLock => "NUMLCK".into(),
-        KeyCode::ScrollLock => "SCRLCK".into(),
-        _ => s.trim_start_matches("KEY").chars().take(6).collect(),
+    let scan = key_to_scan(k) as usize;
+    match OWNKEYCODES.get(scan) {
+        Some(&e) if scan != 0 && e > 37 => ((e - 4) as char).to_string(),
+        Some(&e) if scan != 0 => KEYTABLE[e as usize].into(),
+        // A key the 1993 keyboard didn't have.
+        _ => format!("{:?}", k).to_uppercase().chars().take(6).collect(),
     }
 }
 
-#[allow(dead_code)]
-fn parse(d: &[u8]) -> Option<Save> {
+pub fn parse(d: &[u8]) -> Option<Save> {
     if d.len() < 14 + 194 {
         return None;
     }
@@ -100,7 +113,7 @@ fn parse(d: &[u8]) -> Option<Save> {
     Some(Save { keys, sound, table, winner: String::from_utf8_lossy(&wt[..end]).into_owned() })
 }
 
-fn encode(s: &Save) -> Vec<u8> {
+pub fn encode(s: &Save) -> Vec<u8> {
     let mut d = vec![];
     for k in s.keys {
         d.extend_from_slice(&key_to_scan(k).to_le_bytes());
@@ -122,6 +135,8 @@ fn encode(s: &Save) -> Vec<u8> {
     d
 }
 
+/// Where CONFIG.HIG is kept: the user's settings folder on computers, the app's private folder
+/// on Android.
 #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
 fn path() -> Option<std::path::PathBuf> {
     let base = std::env::var_os("APPDATA")
@@ -131,14 +146,69 @@ fn path() -> Option<std::path::PathBuf> {
     Some(base.join("last-eichhof").join("CONFIG.HIG"))
 }
 
-pub fn load() -> Save {
-    #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
-    if let Some(p) = path() {
-        if let Ok(d) = std::fs::read(p) {
-            if let Some(s) = parse(&d) {
-                return s;
-            }
+#[cfg(target_os = "android")]
+fn path() -> Option<std::path::PathBuf> {
+    android_files_dir().map(|d| d.join("CONFIG.HIG"))
+}
+
+/// The app's private files folder (Context.getFilesDir()), asked through JNI.
+#[cfg(target_os = "android")]
+fn android_files_dir() -> Option<std::path::PathBuf> {
+    use macroquad::miniquad::native::android::{attach_jni_env, ACTIVITY};
+    unsafe {
+        let env = attach_jni_env();
+        let f = &**env;
+        let get_class = f.GetObjectClass?;
+        let get_method = f.GetMethodID?;
+        let call = f.CallObjectMethod?;
+        let chars = f.GetStringUTFChars?;
+        let release = f.ReleaseStringUTFChars?;
+        let mid = get_method(env, get_class(env, ACTIVITY), c"getFilesDir".as_ptr(), c"()Ljava/io/File;".as_ptr());
+        let dir = call(env, ACTIVITY, mid);
+        if dir.is_null() {
+            return None;
         }
+        let mid = get_method(env, get_class(env, dir), c"getAbsolutePath".as_ptr(), c"()Ljava/lang/String;".as_ptr());
+        let jstr = call(env, dir, mid);
+        if jstr.is_null() {
+            return None;
+        }
+        let p = chars(env, jstr, std::ptr::null_mut());
+        let s = std::ffi::CStr::from_ptr(p).to_string_lossy().into_owned();
+        release(env, jstr, p);
+        Some(std::path::PathBuf::from(s))
+    }
+}
+
+// Web: the page keeps CONFIG.HIG in the browser's localStorage (functions in web/index.html).
+#[cfg(target_arch = "wasm32")]
+extern "C" {
+    fn eich_config_load(ptr: *mut u8, max: u32) -> u32;
+    fn eich_config_store(ptr: *const u8, len: u32);
+}
+
+/// Lets the page's storage plugin check it matches this program.
+#[cfg(target_arch = "wasm32")]
+#[no_mangle]
+pub extern "C" fn eich_storage_crate_version() -> u32 {
+    1
+}
+
+fn read_stored() -> Option<Vec<u8>> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let mut buf = vec![0u8; 512];
+        let n = unsafe { eich_config_load(buf.as_mut_ptr(), buf.len() as u32) } as usize;
+        buf.truncate(n.min(512));
+        return if buf.is_empty() { None } else { Some(buf) };
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    return path().and_then(|p| std::fs::read(p).ok());
+}
+
+pub fn load() -> Save {
+    if let Some(s) = read_stored().and_then(|d| parse(&d)) {
+        return s;
     }
     // A CONFIG.HIG the player put beside the program (their own original table).
     #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
@@ -147,19 +217,64 @@ pub fn load() -> Save {
             return s;
         }
     }
-    #[cfg(feature = "embedded")]
-    return parse(DEFAULT).expect("default CONFIG.HIG");
-    #[cfg(not(feature = "embedded"))]
-    fallback()
+    defaults()
 }
 
+/// Saves settings and high scores. Failing to save (a read-only folder, private browsing) only
+/// costs the saved state, so it is reported and otherwise ignored.
 pub fn store(s: &Save) {
-    let _d = encode(s);
-    #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
+    let d = encode(s);
+    #[cfg(target_arch = "wasm32")]
+    unsafe {
+        eich_config_store(d.as_ptr(), d.len() as u32);
+    }
+    #[cfg(not(target_arch = "wasm32"))]
     if let Some(p) = path() {
-        if let Some(dir) = p.parent() {
-            let _ = std::fs::create_dir_all(dir);
+        let res = p.parent().map(std::fs::create_dir_all).unwrap_or(Ok(())).and_then(|_| std::fs::write(&p, &d));
+        if let Err(e) = res {
+            eprintln!("could not save {}: {}", p.display(), e);
         }
-        let _ = std::fs::write(p, _d);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn config_round_trip() {
+        let mut s = defaults();
+        s.keys[4] = KeyCode::LeftControl;
+        s.sound = false;
+        s.table[3] = HighScore { score: 123456, name: "SCHNAPS".into() };
+        let d = encode(&s);
+        assert_eq!(d.len(), 208);
+        let back = parse(&d).unwrap();
+        assert_eq!(back.keys, s.keys);
+        assert!(!back.sound);
+        assert_eq!(back.table[3].score, 123456);
+        assert_eq!(back.table[3].name, "SCHNAPS");
+        assert_eq!(back.table[0].name, "ATOMMUELL");
+        assert_eq!(back.winner, "EIN PROSIT AUF ALPHA-HELIX");
+    }
+
+    #[test]
+    fn reads_the_original_config() {
+        let s = parse(include_bytes!("../data/CONFIG.HIG")).unwrap();
+        assert_eq!(s.table.len(), 8);
+        assert_eq!(encode(&s), include_bytes!("../data/CONFIG.HIG").to_vec());
+    }
+
+    #[test]
+    fn original_key_names() {
+        assert_eq!(key_name(KeyCode::Space), "SPACE");
+        assert_eq!(key_name(KeyCode::PageUp), "PGUP");
+        assert_eq!(key_name(KeyCode::Backspace), "BKSP");
+        assert_eq!(key_name(KeyCode::Kp5), "[5]");
+        assert_eq!(key_name(KeyCode::KpMultiply), "[*]");
+        assert_eq!(key_name(KeyCode::Minus), "-");
+        assert_eq!(key_name(KeyCode::A), "A");
+        assert_eq!(key_name(KeyCode::Key1), "1");
+        assert_eq!(key_name(KeyCode::Up), "UP");
     }
 }

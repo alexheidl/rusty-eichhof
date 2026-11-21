@@ -1,8 +1,17 @@
 # Packaging and releasing on GitHub
 
 The original game is freeware (its READ.ME: "PLEASE copy it to all your friends"), so its data is
-part of this repository: `data/BEER.DAT` and `data/CONFIG.HIG` are built into the program by the
-default `embedded` feature. Release zips are ready to play.
+part of this repository: `data/BEER.DAT` is built into the program by the default `embedded`
+feature. Release zips are ready to play.
+
+## Checks
+
+`.github/workflows/ci.yml` runs on every push and as the first step of each release: clippy, the
+unit tests (decoded game data against golden fingerprints, the CONFIG.HIG format, key names) and
+the self-test, which plays level 1 with scripted keys and compares the final screen and score with
+a recorded fingerprint (`REPLAY` in `src/selftest.rs`). A change that alters gameplay or drawing
+on purpose must update that fingerprint (the self-test JSON prints the new one). The release's web
+build is shrunk with `wasm-opt` and opened in headless Chrome to make sure it starts.
 
 `cargo build --release --no-default-features` still makes a build without the data, which reads
 `BEER.DAT` from beside the program instead.

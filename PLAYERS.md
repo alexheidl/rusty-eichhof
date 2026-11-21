@@ -1,7 +1,8 @@
 THE LAST EICHHOF - a port of the 1993 freeware shoot-'em-up by ALPHA-HELIX
 
 Ready to play: the original game's data is built into the program. Just start it.
-(Web version: open the folder through a web server and load index.html.)
+(Web version: open the folder through a web server and load index.html, then click once:
+browsers only play sound after a click or key press.)
 macOS: the first time, right-click the program and choose Open.
 
 Keys: arrows move, Space fires (hold), P pauses, Esc gives up.

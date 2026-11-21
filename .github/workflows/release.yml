@@ -1,6 +1,7 @@
 # Builds the release for Windows, macOS, Linux and the web whenever a version tag such as v1.0.0
-# arrives on GitHub, and attaches the zips to a draft GitHub release. The original freeware game's
-# data (data/BEER.DAT, data/CONFIG.HIG) is built into the program, so the zips are ready to play.
+# arrives on GitHub (after the checks in ci.yml pass), and attaches the zips to a draft GitHub
+# release. The original freeware game's data (data/BEER.DAT) is built into the program, so the
+# zips are ready to play.
 name: release
 
 on:
@@ -12,7 +13,11 @@ permissions:
   contents: write
 
 jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+
   desktop:
+    needs: test
     strategy:
       fail-fast: false
       matrix:
@@ -35,7 +40,7 @@ jobs:
             exe: last-eichhof
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -55,20 +60,35 @@ jobs:
           cp LICENSE "$dir/LICENSE.txt"
           cp NOTICE "$dir/NOTICE.txt"
           if [ "${{ runner.os }}" = "Windows" ]; then 7z a "$dir.zip" "$dir"; else zip -r "$dir.zip" "$dir"; fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.name }}
           path: last-eichhof-${{ matrix.name }}.zip
 
   web:
+    needs: test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
       - name: Build
         run: cargo build --release --target wasm32-unknown-unknown
+      - name: Shrink the WebAssembly (wasm-opt from binaryen, pinned and checksum-verified)
+        run: |
+          v=version_133
+          f=binaryen-$v-x86_64-linux.tar.gz
+          curl -sSLO https://github.com/WebAssembly/binaryen/releases/download/$v/$f
+          curl -sSLO https://github.com/WebAssembly/binaryen/releases/download/$v/$f.sha256
+          sha256sum -c $f.sha256
+          tar xzf $f
+          w=target/wasm32-unknown-unknown/release/last-eichhof.wasm
+          ls -l $w
+          binaryen-$v/bin/wasm-opt -Oz --enable-bulk-memory --enable-nontrapping-float-to-int \
+            --enable-sign-ext --enable-mutable-globals --enable-multivalue --enable-reference-types \
+            $w -o $w
+          ls -l $w
       - name: Package
         run: |
           dir=last-eichhof-web
@@ -80,7 +100,19 @@ jobs:
           cp LICENSE "$dir/LICENSE.txt"
           cp NOTICE "$dir/NOTICE.txt"
           zip -r "$dir.zip" "$dir"
-      - uses: actions/upload-artifact@v4
+      - name: Check the page starts in a browser (no crash at start)
+        run: |
+          cd last-eichhof-web
+          python3 -m http.server 8765 >/dev/null 2>&1 &
+          sleep 1
+          google-chrome --headless=new --no-sandbox --enable-unsafe-swiftshader --use-angle=swiftshader \
+            --virtual-time-budget=8000 --enable-logging=stderr --v=0 --screenshot=/tmp/web.png \
+            http://localhost:8765/ 2> /tmp/chrome.log || true
+          kill %1
+          grep -i "CONSOLE" /tmp/chrome.log || true
+          if grep -iE "panicked|PanicHookInfo|RuntimeError" /tmp/chrome.log; then exit 1; fi
+          test -s /tmp/web.png
+      - uses: actions/upload-artifact@v7
         with:
           name: web
           path: last-eichhof-web.zip
@@ -90,11 +122,11 @@ jobs:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: dist/*.zip
           draft: true

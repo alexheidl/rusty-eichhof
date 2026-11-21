@@ -93,6 +93,37 @@ fn font(ctx: &Ctx, k: &str) -> Spr {
 
 // ------------------------------------------------------------------ intro and title
 
+/// Web only: browsers keep a page silent until the player clicks or presses a key. Ask for
+/// that first, so the newspaper intro (which ends at the first key) has its tune.
+pub async fn press_to_start(ctx: &mut Ctx) {
+    let f = font(ctx, "font1");
+    let pal = ctx.res.game_pal;
+    ctx.scr.set_pal6(&pal);
+    ctx.scr.fade = 0;
+    ctx.scr.clear(0);
+    for (y, line) in [(90, "THE LAST EICHHOF"), (120, "CLICK OR PRESS A KEY")] {
+        let x = (320 - line.len() as i32 * f.w as i32) / 2;
+        ctx.scr.text(&f, x, y, line);
+    }
+    loop {
+        ctx.frame().await;
+        if macroquad::input::get_last_key_pressed().is_some()
+            || macroquad::input::is_mouse_button_pressed(macroquad::input::MouseButton::Left)
+            || !macroquad::input::touches().is_empty()
+        {
+            break;
+        }
+    }
+    // Let go first, or the same press would end the intro at once.
+    while !macroquad::input::get_keys_down().is_empty()
+        || macroquad::input::is_mouse_button_down(macroquad::input::MouseButton::Left)
+        || !macroquad::input::touches().is_empty()
+    {
+        ctx.frame().await;
+    }
+    ctx.scr.clear(0);
+}
+
 /// The newspaper intro with the scrolling ticker (FUN_1000_5a6f), until a key is pressed.
 pub async fn newspaper(ctx: &mut Ctx) {
     let pak = crate::dat::decode_pak(ctx.res.dat.file("BLICK.PAK").unwrap_or(&[]));
@@ -105,6 +136,8 @@ pub async fn newspaper(ctx: &mut Ctx) {
     black(ctx);
     let music = ctx.res.sound("BLICK.SND").await;
     ctx.play_music(&music, true);
+    // INTRO.C: glowto(63,63,63) then glowin(1): up to white, then the paper fades in.
+    ctx.glow_to_white().await;
     ctx.fade_in().await;
     let text: Vec<u8> = b" . . . ALPHA HELIX PRODUCTION. (C) COPYRIGHT 1993.   PROGRAMMING, SOUND FX AND LEVEL DESIGN BY TRITONE.   GRAPHICS AND FONTS BY TWEETY.   ADDITIONAL PROGRAMMING AND MUSIC BY ZYNAX OF DARK SYSTEM.   ".to_vec();
     let (mut ci, mut col) = (0usize, 0usize);
@@ -217,14 +250,11 @@ async fn credits(ctx: &mut Ctx) {
 }
 
 async fn retrace(ctx: &mut Ctx) {
-    let mut t = 1.0 / 70.0;
-    while t > 0.0 {
+    if ctx.mode == Mode::SelfTest {
         ctx.frame().await;
-        t -= ctx.dt();
-        if ctx.mode == Mode::SelfTest {
-            break;
-        }
+        return;
     }
+    ctx.retrace_wait(1).await;
 }
 
 // ------------------------------------------------------------------ main menu
@@ -283,8 +313,10 @@ async fn menu_choice(ctx: &mut Ctx) -> i32 {
         if let Some(p) = pick {
             if p == 5 {
                 // Options stay on this screen (FUN_1000_0ef6).
-                options(ctx, &mut ui, cur, &mentxt, &ofont, &pal, &mut rot).await;
-                item = 5;
+                options(ctx, &mut ui, cur, &mentxt, &ofont).await;
+                // MENU.C: back in the main menu the tune starts again and item 1 is selected.
+                ctx.play(&snd);
+                item = 1;
                 continue;
             }
             ctx.fade_out().await;
@@ -324,7 +356,9 @@ fn cycle(ctx: &mut Ctx, base: &Pal, rot: &mut i32) {
     }
 }
 
-async fn options(ctx: &mut Ctx, ui: &mut Ui, cur: i32, mentxt: &Spr, of: &Spr, pal: &Pal, rot: &mut i32) {
+/// MENU.C options(): the sound stops and the colours stand still while it is open.
+async fn options(ctx: &mut Ctx, ui: &mut Ui, cur: i32, mentxt: &Spr, of: &Spr) {
+    ctx.stop_fx();
     let draw = |ctx: &mut Ctx| {
         ctx.scr.blit_opaque(mentxt, 1, 0xa0, 0x2e);
         ctx.scr.text(of, 0x9f, 0x34, "OPTIONS");
@@ -338,11 +372,9 @@ async fn options(ctx: &mut Ctx, ui: &mut Ui, cur: i32, mentxt: &Spr, of: &Spr, p
     let mut item = 1;
     loop {
         while ctx.any() {
-            cycle(ctx, pal, rot);
             ui.step(ctx).await;
         }
         while !ctx.any() {
-            cycle(ctx, pal, rot);
             ui.step(ctx).await;
         }
         let fire = ctx.down(G::Fire) || ctx.down(G::Enter);
@@ -360,12 +392,15 @@ async fn options(ctx: &mut Ctx, ui: &mut Ui, cur: i32, mentxt: &Spr, of: &Spr, p
             ui.sp.remove(cur);
             choose_keys(ctx, of).await;
             draw(ctx);
-            let c = ui.sp.create(&ui.lib, 0, 0x8e, 0x41 + 9 * (item - 1), 0);
+            // Afterwards item 1 is selected again (MENU.C: selected = showoptions()).
+            let c = ui.sp.create(&ui.lib, 0, 0x8e, 0x41, 0);
             debug_assert_eq!(c, cur);
+            item = 1;
+            continue;
         }
         if ctx.down(G::N3) || (item == 3 && fire) {
             ctx.scr.blit_opaque(mentxt, 0, 0xa0, 0x2e);
-            ui.sp.set_pos(cur, 0x8e, 0x3a + 9 * 4);
+            ui.sp.set_pos(cur, 0x8e, 0x3a);
             return;
         }
         if ctx.down(G::Up) && item > 1 {
@@ -407,7 +442,11 @@ async fn choose_keys(ctx: &mut Ctx, of: &Spr) {
             ctx.scr.text(of, 200, y, &crate::save::key_name(k));
         }
     }
+    // MENU.C defkeys: waitforkey() (all keys up, then one more press) before saving.
     ctx.wait_release().await;
+    if ctx.mode != Mode::SelfTest {
+        ctx.wait_press().await;
+    }
     crate::save::store(&ctx.save);
 }
 
@@ -506,7 +545,7 @@ async fn level_intro(ctx: &mut Ctx, name: &str) {
     let go = font(ctx, "go");
     let f3 = font(ctx, "font3");
     ctx.scr.blit_opaque(&go, 0, 0x44, 0x6e);
-    let x = 0x9f - (name.len() as i32 * f3.w as i32 >> 1);
+    let x = 0x9f - ((name.len() as i32 * f3.w as i32) >> 1);
     ctx.scr.text(&f3, x, 0x28, name);
     let snd = ctx.res.sound("GO.SND").await;
     ctx.play(&snd);
@@ -568,6 +607,10 @@ pub async fn high_scores(ctx: &mut Ctx, score: Option<u32>) {
             ctx.save.table.insert(i, crate::ctx::HighScore { score: s, name: String::new() });
             ctx.save.table.truncate(8);
             rank = Some(i);
+            if i == 0 {
+                // HISCORE.C: a new winner's old text is gone before the table is shown.
+                ctx.save.winner.clear();
+            }
         }
     }
     for i in 0..8 {
@@ -637,7 +680,8 @@ async fn type_line(ctx: &mut Ctx, f: &Spr, x0: i32, y: i32, max: usize, centred:
         blink -= 1;
         ctx.tick().await;
         let mut done = ctx.down(G::Enter) && !ctx.typed.iter().any(|c| *c != '\r' && *c != '\n');
-        let typed: Vec<char> = ctx.typed.drain(..).collect();
+        let typed: Vec<char> = std::mem::take(&mut ctx.typed);
+        let mut erased = false;
         for c in typed {
             let c = c.to_ascii_uppercase();
             let ok = if centred {
@@ -649,11 +693,17 @@ async fn type_line(ctx: &mut Ctx, f: &Spr, x0: i32, y: i32, max: usize, centred:
                 done = true;
             } else if c == '\u{8}' {
                 s.pop();
-            } else if ok && s.len() < max {
+                erased = true;
+            } else if ok {
+                // HISCORE.C: when the line is full, a new character replaces the last one.
+                if s.len() >= max {
+                    s.pop();
+                }
                 s.push(c);
             }
         }
-        if macroquad::input::is_key_pressed(macroquad::input::KeyCode::Backspace) && !s.is_empty() {
+        // Some systems send Backspace only as a key, others also as a character: erase once.
+        if !erased && macroquad::input::is_key_pressed(macroquad::input::KeyCode::Backspace) {
             s.pop();
         }
         ctx.scr.blit_opaque(f, 0, cx, y);
@@ -680,7 +730,7 @@ pub async fn shop(ctx: &mut Ctx, hero: &mut Hero) {
     hero.money = hero.money.wrapping_add(gain / 2500 * 5);
     hero.last_shop_score = hero.score;
     if hero.cheat & 2 != 0 {
-        hero.money = 999_999;
+        hero.money = 999_995; // SHOP.C: Fr. 9999.95
     }
     let sell_music = ctx.res.sound("SELL.SND").await;
     ctx.play_music(&sell_music, true);
@@ -801,13 +851,11 @@ async fn sell(ctx: &mut Ctx, hero: &mut Hero) {
         if sel == 0 || leave {
             break;
         }
-        // Sell: the money counts up (FUN_1000_2621).
-        let target = hero.money + hero.mounts[sel].w.price as u32 * 3 / 4;
-        while hero.money < target {
-            hero.money = (hero.money + 3).min(target);
-            money_places(ctx, &f1, 0x13f - w, 0xd2, hero.money, 7);
-            ui.step(ctx).await;
-        }
+        // Sell: the money counts up (SHOP.C givemoneyback), one Rappen per pass without waiting
+        // for the timer, so it is there at once.
+        hero.money += hero.mounts[sel].w.price as u32 * 3 / 4;
+        money_places(ctx, &f1, 0x13f - w, 0xd2, hero.money, 7);
+        ui.step(ctx).await;
         ui.sp.remove(hs[sel]);
         hero.mounts.remove(sel);
         hs.remove(sel);
@@ -984,18 +1032,15 @@ async fn store(ctx: &mut Ctx, hero: &mut Hero) -> bool {
     false
 }
 
-/// The money counts down while paying (FUN_1000_25b3).
+/// Paying (SHOP.C payforweapon): the money counts down one Rappen per pass without waiting for
+/// the timer, so the new amount shows at once.
 async fn pay(ctx: &mut Ctx, ui: &mut Ui, hero: &mut Hero, f1: &Spr, price: u32) {
     if hero.cheat & 2 != 0 {
         return;
     }
-    let target = hero.money.saturating_sub(price);
-    let w = f1.w as i32;
-    while hero.money > target {
-        hero.money = hero.money.saturating_sub(3).max(target);
-        money_places(ctx, f1, 0x13f - w, 0xd2, hero.money, 7);
-        ui.step(ctx).await;
-    }
+    hero.money = hero.money.saturating_sub(price);
+    money_places(ctx, f1, 0x13f - f1.w as i32, 0xd2, hero.money, 7);
+    ui.step(ctx).await;
 }
 
 /// FUN_1000_2c54: drinks (weapons 5..) and schnaps bonus (extra life, speed).
@@ -1021,8 +1066,8 @@ async fn menu_card(ctx: &mut Ctx, hero: &mut Hero) {
         let mut y = 0xc + mh + 6;
         for (i, wp) in weapons.iter().enumerate().skip(5) {
             if wp.kind & 0x8000 != 0 {
-                ctx.scr.text(&mf, 0x45, y, &wp.name);
-                money_digits_m(ctx, &mf, 0xfe, y, wp.price as u32);
+                ctx.scr.text(&mf, 0x45, y, &dotted(&wp.name));
+                money_digits(ctx, &mf, 0xfe, y, wp.price as u32);
                 items.push((i, y + 2));
                 y += mh + 3;
             }
@@ -1032,8 +1077,8 @@ async fn menu_card(ctx: &mut Ctx, hero: &mut Hero) {
         y += mh + 6;
         for (i, wp) in weapons.iter().enumerate().skip(5) {
             if wp.kind & 0x8000 == 0 {
-                ctx.scr.text(&mf, 0x45, y, &wp.name);
-                money_digits_m(ctx, &mf, 0xfe, y, wp.price as u32);
+                ctx.scr.text(&mf, 0x45, y, &dotted(&wp.name));
+                money_digits(ctx, &mf, 0xfe, y, wp.price as u32);
                 items.push((i, y + 2));
                 y += mh + 3;
             }
@@ -1128,8 +1173,14 @@ async fn menu_card(ctx: &mut Ctx, hero: &mut Hero) {
     }
 }
 
-fn money_digits_m(ctx: &mut Ctx, f: &Spr, right_x: i32, y: i32, v: u32) {
-    money_digits(ctx, f, right_x, y, v);
+/// A menu-card line: the name padded with dots to 28 characters (SHOP.C), the price is
+/// written over the end.
+fn dotted(name: &str) -> String {
+    let mut s: String = name.chars().take(28).collect();
+    while s.len() < 28 {
+        s.push('.');
+    }
+    s
 }
 
 /// FUN_1000_22cb: move the new weapon around the bottle and fix it with Fire (Esc gives up).
@@ -1217,7 +1268,7 @@ async fn place(ctx: &mut Ctx, hero: &mut Hero, wp: &crate::res::Wpn) {
 
 fn test_keys(t: u64) -> Vec<G> {
     let mut v = vec![G::Fire];
-    if (t / 25) % 2 == 0 {
+    if (t / 25).is_multiple_of(2) {
         v.push(G::Left);
     } else {
         v.push(G::Right);

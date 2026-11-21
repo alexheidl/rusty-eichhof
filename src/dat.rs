@@ -171,7 +171,7 @@ pub fn decode_pcx(data: &[u8]) -> Pcx {
             let v = data.get(p).copied().unwrap_or(0);
             p += 1;
             let n = ((b & 0x3F) as usize).min(total - raw.len());
-            raw.extend(std::iter::repeat(v).take(n));
+            raw.extend(std::iter::repeat_n(v, n));
         } else {
             raw.push(b);
         }
@@ -473,7 +473,7 @@ pub fn decode_pak(data: &[u8]) -> Frame {
             if c < 0x80 {
                 let v = data.get(p).copied().unwrap_or(0);
                 p += 1;
-                buf.extend(std::iter::repeat(v).take(c + 1));
+                buf.extend(std::iter::repeat_n(v, c + 1));
             } else {
                 let n = c - 0x7F;
                 let end = (p + n).min(data.len());
@@ -496,7 +496,7 @@ pub fn decode_pak(data: &[u8]) -> Frame {
 /// PAPER.FNT: the intro's 1-bit scroller font, 40x40 glyphs for characters
 /// 0x20.. (glyph = char - 0x20). Set pixels are index 15, clear ones 0.
 pub fn decode_paper_font(data: &[u8]) -> Vec<Frame> {
-    data.chunks_exact(200)
+    data.as_chunks::<200>().0.iter()
         .map(|g| {
             let mut pixels = vec![0u8; 40 * 40];
             for col in 0..5 {
@@ -577,4 +577,41 @@ mod tests {
         assert_eq!(title.rate, 15151);
         assert_eq!(decode_snd(dat.file("LONGTIME.SND").unwrap()).rate, 12048);
     }
+
+    fn fnv(h: &mut u64, bytes: &[u8]) {
+        for &b in bytes {
+            *h = (*h ^ b as u64).wrapping_mul(0x100000001b3);
+        }
+    }
+
+    /// Golden fingerprints of everything decoded from BEER.DAT (the decoders were checked
+    /// against the original source, see MECHANICS.md): a change to any decoder shows up here.
+    #[test]
+    fn decoded_data_is_unchanged() {
+        let dat = Dat::parse(DATA);
+        let (mut pcx, mut spr, mut sli, mut snd, mut other) = [0xcbf29ce484222325u64; 5].into();
+        for e in dat.entries() {
+            let d = dat.file(&e.name).unwrap();
+            match e.name.rsplit('.').next().unwrap() {
+                "PCX" => {
+                    let p = decode_pcx(d);
+                    fnv(&mut pcx, &p.pixels);
+                    p.palette.iter().for_each(|c| fnv(&mut pcx, c));
+                }
+                "SPR" => decode_spr(d).iter().for_each(|f| fnv(&mut spr, &f.pixels)),
+                "SLI" => decode_sli(d).iter().flat_map(|s| &s.frames).for_each(|f| fnv(&mut sli, &f.pixels)),
+                // Level banks hold the ADPCM-compressed sounds.
+                "SND" if e.name.starts_with("LEVEL") => decode_snd_bank(d).iter().for_each(|s| fnv(&mut snd, &s.samples)),
+                "SND" => fnv(&mut snd, &decode_snd(d).samples),
+                "STA" => decode_sta(d).iter().for_each(|s| fnv(&mut other, &[s.x as u8, s.y as u8, s.speed as u8, s.colour])),
+                _ => {}
+            }
+        }
+        fnv(&mut other, &decode_pak(dat.file("BLICK.PAK").unwrap()).pixels);
+        decode_paper_font(dat.file("PAPER.FNT").unwrap()).iter().for_each(|f| fnv(&mut other, &f.pixels));
+        let got = [pcx, spr, sli, snd, other];
+        assert_eq!(got, GOLDEN);
+    }
+
+    const GOLDEN: [u64; 5] = [0xc6eb093a01748f8c, 0x27ebe82688136172, 0xcd311c764760f31d, 0x5f7c2012e8423e0d, 0x167c12de358083b3];
 }

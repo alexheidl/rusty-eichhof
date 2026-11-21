@@ -21,7 +21,8 @@ The prototype decoders are in `tools/eich.py`; the Rust ones in `src/dat.rs`.
 
 | offset | size | field |
 |---|---|---|
-| 0x00 | 32 | magic `"ALPHA-HELIX COMBINER VER 3.3"` + `0x1A` + padding |
+| 0x00 | 30 | text `"ALPHA-HELIX COMBINER VER 3.3"` + `0x1A` + padding (FILEMAN.C, COMBINER.C) |
+| 0x1E | 2 | mode (always 0) |
 | 0x20 | 2 | entry count (78) |
 | 0x22 | 24 x count | directory |
 
@@ -184,8 +185,9 @@ FUN_1000_653e). Counts: LEVEL0 2, LEVEL1 23, LEVEL2 24, LEVEL3 12, LEVEL4 15.
 ## Other level files
 
 * `LEVELn.DSC` (50 bytes): u16 level number, NUL-terminated level name at 2
-  (shown on the GO screen, FUN_1000_1755), two u16 bonuses at 0x2C and 0x2E
-  added to the score/money counters.
+  (shown on the GO screen, FUN_1000_1755), u16 at 0x2A = `nbigboss` (the goal:
+  how many end enemies must be shot), two u16 bonuses at 0x2C and 0x2E added to
+  the score/money counters, u16 flags at 0x30 (DESCRIPT.C, BALLER.H).
 * `LEVELn.STA` (star field, FUN_1000_672a/6fb5): `u16 count`, then
   `count` x `{x, y, colour, speed}` (i16). Stars are single pixels in plane 0
   (visible x = `x & ~3`), moving down `speed` lines per frame and wrapping at
@@ -204,8 +206,10 @@ FUN_1000_653e). Counts: LEVEL0 2, LEVEL1 23, LEVEL2 24, LEVEL3 12, LEVEL4 15.
   runs continuously across the planes: control byte `c < 0x80`: repeat the
   next byte `c + 1` times; `c >= 0x80`: copy the next `c - 0x7F` bytes. The
   file decodes exactly to its end. Colours: palette indices 0..15 of the game
-  palette (which are the standard EGA colours); the game also fades it in from
-  white.
+  palette (which are the standard EGA colours). INTRO.C first raises every colour
+  from black to white (`glowto(63,63,63)`, 21 steps of 3, one 70 Hz refresh each), then
+  fades the picture in from dark (`glowin`). `COMPRESS.C` (the authors' tool) writes a
+  48-byte palette before the data, but the shipped BLICK.PAK has none.
 * `PAPER.FNT`: 59 glyphs for characters 0x20..0x5A, 200 bytes each:
   5 byte-columns x 40 rows, 1 bit per pixel, MSB left, column-major
   (`glyph + col * 40 + row`). Glyph = 40x40 pixels, set bits are drawn in

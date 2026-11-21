@@ -44,11 +44,7 @@ fn arg_after(flag: &str) -> Option<String> {
 
 #[macroquad::main(window_conf)]
 async fn main() {
-    let started = std::time::Instant::now();
     let shot = arg_after("--screenshot");
-    if std::env::args().any(|a| a == "--self-test" || a == "--screenshot") {
-        eprintln!("window up after {:?}", started.elapsed());
-    }
     let test = arg_after("--self-test");
     let mode = if test.is_some() {
         Mode::SelfTest
@@ -57,14 +53,27 @@ async fn main() {
     } else {
         Mode::Normal
     };
-    let t0 = std::time::Instant::now();
+    // (No std::time here: the browser build has no clock and would stop at once.)
+    let t0 = macroquad::time::get_time();
     let Some(data) = res::beer_dat().await else {
-        missing_data().await;
+        message(&[
+            "BEER.DAT was not found.",
+            "Copy BEER.DAT from your own copy of the original game",
+            "into the same folder as this program, then start it again.",
+        ])
+        .await;
         return;
     };
-    let res = res::Res::load(data);
+    let res = match res::Res::load(data) {
+        Ok(r) => r,
+        Err(e) => {
+            let e = format!("({})", e);
+            message(&["BEER.DAT is damaged or from a different game:", &e, "Replace it with the original file."]).await;
+            return;
+        }
+    };
     if mode != Mode::Normal {
-        eprintln!("resources loaded in {:?}", t0.elapsed());
+        eprintln!("resources loaded in {:.1} ms", (macroquad::time::get_time() - t0) * 1000.0);
     }
     let mut ctx = Ctx::new(res, mode);
     // The original's cheat: an argument like "007.5" (bits: 1 lives, 2 money, 4 invulnerable).
@@ -105,6 +114,11 @@ async fn main() {
         screens::scene(&mut ctx, &scene).await;
         return;
     }
+    // Browsers only allow sound after the player has clicked or pressed a key, and the intro
+    // ends at the first key: ask for that press first so the intro tune is heard.
+    if cfg!(target_arch = "wasm32") && mode == Mode::Normal {
+        screens::press_to_start(&mut ctx).await;
+    }
     screens::newspaper(&mut ctx).await;
     while !ctx.quit {
         screens::title(&mut ctx).await;
@@ -112,8 +126,8 @@ async fn main() {
     }
 }
 
-/// Shown by release builds when the player's own BEER.DAT isn't beside the program.
-async fn missing_data() {
+/// A plain message when the game data can't be used (missing or damaged BEER.DAT).
+async fn message(body: &[&str]) {
     let checking = std::env::args().any(|a| a == "--screenshot" || a == "--self-test");
     let mut frames = 0;
     loop {
@@ -122,15 +136,9 @@ async fn missing_data() {
             return;
         }
         clear_background(BLACK);
-        let lines = [
-            "THE LAST EICHHOF",
-            "",
-            "BEER.DAT was not found.",
-            "Copy BEER.DAT from your own copy of the original game",
-            "into the same folder as this program, then start it again.",
-            "",
-            "Press Esc to close.",
-        ];
+        let mut lines = vec!["THE LAST EICHHOF", ""];
+        lines.extend_from_slice(body);
+        lines.extend_from_slice(&["", "Press Esc to close."]);
         for (i, l) in lines.iter().enumerate() {
             draw_text(l, 30.0, 60.0 + i as f32 * 34.0, 30.0, if i == 0 { YELLOW } else { WHITE });
         }
