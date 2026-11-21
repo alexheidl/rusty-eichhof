@@ -97,3 +97,9 @@ How releases are made: [RELEASING.md](RELEASING.md).
 *The Last Eichhof* © 1993 ALPHA-HELIX (Tritone, Tweety, Zynax of Dark System), freeware.
 Port built with [macroquad](https://github.com/not-fl3/macroquad) (MIT/Apache-2.0).
 Details in [CREDITS.md](CREDITS.md).
+
+## License
+
+The port's own code is released under the [MIT License](LICENSE). This does **not** cover the
+original game's files in `data/`: *The Last Eichhof* and everything in `BEER.DAT` remain © 1993
+ALPHA-HELIX, freeware, included unchanged as the authors invited ("Please copy like crazy").

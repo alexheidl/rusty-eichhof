@@ -52,6 +52,7 @@ jobs:
           cp target/${{ matrix.target }}/release/${{ matrix.exe }} "$dir/"
           cp PLAYERS.md "$dir/README.txt"
           cp data/READ.ME "$dir/ORIGINAL-READ.ME"
+          cp LICENSE "$dir/LICENSE.txt"
           if [ "${{ runner.os }}" = "Windows" ]; then 7z a "$dir.zip" "$dir"; else zip -r "$dir.zip" "$dir"; fi
       - uses: actions/upload-artifact@v4
         with:
@@ -75,6 +76,7 @@ jobs:
           cp target/wasm32-unknown-unknown/release/last-eichhof.wasm "$dir/"
           cp PLAYERS.md "$dir/README.txt"
           cp data/READ.ME "$dir/ORIGINAL-READ.ME"
+          cp LICENSE "$dir/LICENSE.txt"
           zip -r "$dir.zip" "$dir"
       - uses: actions/upload-artifact@v4
         with:

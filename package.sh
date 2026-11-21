@@ -8,5 +8,6 @@ mkdir -p "dist/$name"
 cp target/release/last-eichhof "dist/$name/"
 cp PLAYERS.md "dist/$name/README.txt"
 cp data/READ.ME "dist/$name/ORIGINAL-READ.ME"
+cp LICENSE "dist/$name/LICENSE.txt"
 (cd dist && zip -qr "$name.zip" "$name")
 echo "Done: dist/$name.zip"
