@@ -21,7 +21,6 @@ opt-level = 3
 lto = true
 codegen-units = 1
 strip = true
-panic = "abort"
 
 # Android: reads the app's private folder (where settings and high scores are saved) through JNI.
 [target.'cfg(target_os = "android")'.dependencies]
